@@ -1,7 +1,9 @@
 # Based on: https://gist.github.com/macieksk/038b201a54d9e804d1b5
 
 import os
+import datetime
 from io import StringIO
+
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 
@@ -60,6 +62,8 @@ class Drive:
         if not append:
             # Clear the log
             self.__logs[fname] = []
+
+        string = '[{}]\n{}\n'.format(datetime.datetime.now(), string)
 
         self.__logs[fname].append(string)
         self.__files[fname].SetContentString('\n'.join(self.__logs[fname]))

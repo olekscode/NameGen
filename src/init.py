@@ -1,5 +1,5 @@
-from metrics import confusion_dataframe
-from visualizations import plot_confusion_dataframe, plot_histories
+from metrics import confusion_dataframe, bleu
+from visualizations import plot_confusion_dataframe, plot_history, COLORS
 from drive import Drive
 from models.seq2seq import Seq2seq
 from preprocessing import unindex, read_langs, train_test_valid_split
@@ -7,14 +7,13 @@ from constants import *
 
 import os
 import time
-import datetime
 import math
 from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
 
-from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
+#from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 
 import torch
 import torch.nn as nn
@@ -48,24 +47,35 @@ def evaluate(model, x, y):
         ('Source', [unindex(each, source_vocab) for each in x.numpy()]),
         ('True Name', y_true),
         ('Our Name', y_pred),
-        ('BLEU', [sentence_bleu([y_true[i]], y_pred[i]) for i in range(len(y_true))])
+        ('BLEU', [bleu(y_true[i], y_pred[i]) for i in range(len(y_true))])
     ]))
     
-    corp_bleu = corpus_bleu(y_true, y_pred)
-    
-    return df, corp_bleu
+    return df
 
 
-def write_training_log(log_dict, corpus_bleu_history, sentence_bleu_history, loss_history, translations):
-    log_template =\
-        "[{}]\n".format(datetime.datetime.now()) +\
-        ": {}\n".join(list(log_dict.keys()) + [""])
-
+def write_training_log(log_dict, bleu_history, loss_history, translations):
+    log_template = ": {}\n".join(log_dict.keys()) + ": {}"
     log_string = log_template.format(*log_dict.values())
+
     drive.log(log_string, fname="train-log.txt")
 
-    fname = '../img/histories.png'
-    fig = plot_histories(corpus_bleu_history, np.array(sentence_bleu_history).T, loss_history)
+    fig = plot_history(
+        history = loss_history,
+        color = COLORS['red'],
+        title = 'Average Loss',
+        ylabel = 'Loss')
+
+    fname = '../img/loss.png'
+    fig.savefig(fname)
+    drive.upload_image(fname)
+
+    fig = plot_history(
+        history = bleu_history,
+        color = COLORS['green'],
+        title = 'Average BLEU',
+        ylabel = 'BLEU')
+
+    fname = '../img/bleu.png'
     fig.savefig(fname)
     drive.upload_image(fname)
 
@@ -80,8 +90,8 @@ def write_training_log(log_dict, corpus_bleu_history, sentence_bleu_history, los
     fig.savefig(fname)
     drive.upload_image(fname)
 
-    drive.log_dataframe(translations.sort_values('BLEU', ascending=False).head(20), 'translations.csv')
-    drive.log_dataframe(confusion_df[confusion_df['PP'] > 0]['PP'], 'names.csv')
+    drive.log_dataframe(translations.sort_values('BLEU', ascending=False).head(20), 'translations.txt')
+    drive.log_dataframe(confusion_df[confusion_df['PP'] > 0]['PP'], 'names.txt')
 
 
 if __name__ == '__main__':
@@ -97,8 +107,8 @@ if __name__ == '__main__':
 
     source_vocab, target_vocab, corpora = read_langs('source', 'name', methods)
 
-    # # Danger
-    # corpora = corpora[:300]
+    # Danger
+    corpora = corpora[:300]
 
     (x_train, y_train), (x_valid, y_valid), (x_test, y_test) = train_test_valid_split(corpora, source_vocab, target_vocab)
 
@@ -114,8 +124,7 @@ if __name__ == '__main__':
     softmax = nn.Softmax(dim=1)
 
     loss_history = []
-    corpus_bleu_history = []
-    sentence_bleu_history = []
+    bleu_history = []
 
     # training_dist = torch.zeros(target_vocab.n_words, MAX_SEQ_LENGTH)
     total_batches = int(len(batch_indices)/BATCH_SIZE)
@@ -147,11 +156,10 @@ if __name__ == '__main__':
         train_time_elapsed = time.time() - train_start_time
         
         eval_start_time = time.time()
-        translations, bleu = evaluate(model, x_valid, y_valid)
+        translations = evaluate(model, x_valid, y_valid)
         eval_time_elapsed = time.time() - eval_start_time
 
-        corpus_bleu_history.append(bleu)
-        sentence_bleu_history.append(translations['BLEU'])
+        bleu_history.append(translations['BLEU'].mean())
         loss_history.append(total_loss / total_batches)
 
         epoch_time_elapsed = time.time() - epoch_start_time
@@ -160,8 +168,7 @@ if __name__ == '__main__':
         log_dict = OrderedDict([
             ("Epoch", epoch + 1),
             ("Average loss", total_loss / total_batches),
-            ("Corpus BLEU", bleu),
-            ("Average sentence BLEU", translations['BLEU'].mean()),
+            ("Average BLEU", bleu_history[-1]),
             ("Unique names", len(translations['Our Name'].unique())),
             ("Epoch time", time_str(epoch_time_elapsed)),
             ("Training time", time_str(train_time_elapsed)),
@@ -171,7 +178,6 @@ if __name__ == '__main__':
 
         write_training_log(
             log_dict,
-            corpus_bleu_history,
-            sentence_bleu_history,
+            bleu_history,
             loss_history,
             translations)

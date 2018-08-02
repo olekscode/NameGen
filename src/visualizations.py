@@ -3,6 +3,11 @@ import seaborn as sns
 
 sns.set()
 
+COLORS = {
+    'green': sns.xkcd_rgb["faded green"],
+    'red': sns.xkcd_rgb["pale red"]
+}
+
 
 def plot_confusion_dataframe(df, nrows=5, with_percents=False, total=None):
     df = df.head(nrows)
@@ -23,29 +28,12 @@ def plot_confusion_dataframe(df, nrows=5, with_percents=False, total=None):
     return fig
 
 
-def plot_histories(corpus_bleu_history, sentence_bleu_history, loss_history): 
-    fig, ax = plt.subplots(1, 3, figsize=(18,4))
-    
-    ax[0].plot(corpus_bleu_history, sns.xkcd_rgb["denim blue"])
-    ax[0].set_title('Corpus BLEU')
-    ax[0].set_xlabel('Epoch')
-    ax[0].set_ylabel('BLEU')
-    
-    if sentence_bleu_history.shape[1] > 1:
-        sns.tsplot(sentence_bleu_history,
-                   ax=ax[1],
-                   color=sns.xkcd_rgb['faded green'])
-
-    ax[1].set_title('Sentence BLEU')
-    ax[1].set_xlabel('Epoch')
-    ax[1].set_ylabel('BLEU')
-    
-    ax[2].plot(loss_history, sns.xkcd_rgb["pale red"])
-    ax[2].set_title('Average loss')
-    ax[2].set_xlabel('Epoch')
-    ax[2].set_ylabel('Loss')
-    
-    #plt.subplots_adjust(left=0.2, wspace=0.25, top=0.8)
+def plot_history(history, color, title, ylabel, xlabel='Epoch'): 
+    fig, ax = plt.subplots()
+    ax.plot(history, color)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     return fig
 
 

@@ -5,7 +5,8 @@ sns.set()
 
 COLORS = {
     'green': sns.xkcd_rgb["faded green"],
-    'red': sns.xkcd_rgb["pale red"]
+    'red': sns.xkcd_rgb["pale red"],
+    'blue': sns.xkcd_rgb["medium blue"]
 }
 
 

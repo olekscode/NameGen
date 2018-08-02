@@ -153,4 +153,19 @@ def bleu(reference, candidate):
     m = len([word for word in candidate if word in reference])
     w = len(candidate)
 
+    if w == 0:
+        w = 0.000000001
+
+    return m / w
+
+
+def rouge(reference, candidate):
+    reference = set(reference)
+
+    m = len([word for word in candidate if word in reference])
+    w = len(reference)
+
+    if w == 0:
+        w = 0.000000001
+
     return m / w

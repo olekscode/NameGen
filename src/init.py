@@ -1,4 +1,4 @@
-from metrics import confusion_dataframe, bleu
+from metrics import confusion_dataframe, bleu, rouge
 from visualizations import plot_confusion_dataframe, plot_history, COLORS
 from drive import Drive
 from models.seq2seq import Seq2seq
@@ -47,13 +47,14 @@ def evaluate(model, x, y):
         ('Source', [unindex(each, source_vocab) for each in x.numpy()]),
         ('True Name', y_true),
         ('Our Name', y_pred),
-        ('BLEU', [bleu(y_true[i], y_pred[i]) for i in range(len(y_true))])
+        ('BLEU', [bleu(y_true[i], y_pred[i]) for i in range(len(y_true))]),
+        ('ROUGE', [rouge(y_true[i], y_pred[i]) for i in range(len(y_true))])
     ]))
     
     return df
 
 
-def write_training_log(log_dict, bleu_history, loss_history, translations):
+def write_training_log(log_dict, bleu_history, rouge_history, loss_history, translations):
     log_template = ": {}\n".join(log_dict.keys()) + ": {}"
     log_string = log_template.format(*log_dict.values())
 
@@ -71,11 +72,21 @@ def write_training_log(log_dict, bleu_history, loss_history, translations):
 
     fig = plot_history(
         history = bleu_history,
-        color = COLORS['green'],
+        color = COLORS['blue'],
         title = 'Average BLEU',
         ylabel = 'BLEU')
 
     fname = '../img/bleu.png'
+    fig.savefig(fname)
+    drive.upload_image(fname)
+
+    fig = plot_history(
+        history = rouge_history,
+        color = COLORS['green'],
+        title = 'Average ROUGE',
+        ylabel = 'ROUGE')
+
+    fname = '../img/rouge.png'
     fig.savefig(fname)
     drive.upload_image(fname)
 
@@ -125,6 +136,7 @@ if __name__ == '__main__':
 
     loss_history = []
     bleu_history = []
+    rouge_history = []
 
     # training_dist = torch.zeros(target_vocab.n_words, MAX_SEQ_LENGTH)
     total_batches = int(len(batch_indices)/BATCH_SIZE)
@@ -160,6 +172,7 @@ if __name__ == '__main__':
         eval_time_elapsed = time.time() - eval_start_time
 
         bleu_history.append(translations['BLEU'].mean())
+        rouge_history.append(translations['ROUGE'].mean())
         loss_history.append(total_loss / total_batches)
 
         epoch_time_elapsed = time.time() - epoch_start_time
@@ -169,6 +182,7 @@ if __name__ == '__main__':
             ("Epoch", epoch + 1),
             ("Average loss", total_loss / total_batches),
             ("Average BLEU", bleu_history[-1]),
+            ("Average ROUGE", rouge_history[-1]),
             ("Unique names", len(translations['Our Name'].unique())),
             ("Epoch time", time_str(epoch_time_elapsed)),
             ("Training time", time_str(train_time_elapsed)),
@@ -179,5 +193,6 @@ if __name__ == '__main__':
         write_training_log(
             log_dict,
             bleu_history,
+            rouge_history,
             loss_history,
             translations)

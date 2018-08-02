@@ -6,39 +6,81 @@ from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 
 
-class DriveUploader:
+class Drive:
     def __init__(self, folder_name):
         self.__login()
         self.__folder = self.__find_folders(folder_name)[0]
 
-        self.__log = []
+        self.__files = {}
+        self.__logs = {}
 
-        self.__log_file = self.__drive.CreateFile({
-            'title':'log.txt',
-            'parents':[{ u'id': self.__folder['id'] }]
-        })
 
-        self.__translations_file = self.__drive.CreateFile({
-            'title':'translations.csv',
-            'mimeType':'text/csv',
-            'parents':[{ u'id': self.__folder['id'] }]
-        })
+    def log(self, string, fname, append=True):
+        """Writes a log string to the file on Google Drive.
 
-    def upload_to_drive(self, files):
-        self.__upload_files_to_folder(files, self.__folder)
+        If file with this name doesn't exist it gets created.
 
-    
-    def log(self, string):
-        self.__log.append(string)
-        self.__log_file.SetContentString('\n'.join(self.__log))
-        self.__log_file.Upload()
+        Parameters
+        ----------
 
-    
-    def update_translations(self, df):
+        string : str
+            A string to be written
+
+        fname : str
+            File name on Google Drive
+
+        append : bool
+            Append to the end of existing file or rewrite it
+
+        Examples
+        --------
+
+        >>> from drive import Drive
+
+        Login and authenticate.
+
+        >>> drive = Drive('NameGen')
+
+        Create a new file and write several logs to it.
+
+        >>> drive.log('Lorem ipsum', 'lipsum.txt')
+        >>> drive.log('dolor sit', 'lipsum.txt')
+        >>> drive.log('amet', 'lipsum.txt')
+
+        Create a new file and override it with each log
+
+        >>> drive.log('Hello', 'hello.txt')
+        >>> drive.log('world', 'hello.txt', append=False)
+        """
+
+        if fname not in self.__files.keys():
+            self.__files[fname] = self.__create_text_file(fname)
+            self.__logs[fname] = []
+
+        if not append:
+            # Clear the log
+            self.__logs[fname] = []
+
+        self.__logs[fname].append(string)
+        self.__files[fname].SetContentString('\n'.join(self.__logs[fname]))
+        self.__files[fname].Upload()
+
+
+    def log_dataframe(self, df, fname, append=False):
         s = StringIO()
         df.to_csv(s)
-        self.__translations_file.SetContentString(s.getvalue())
-        self.__translations_file.Upload()
+        string = s.getvalue()
+
+        self.log(string, fname, append=append)
+
+
+    def upload_image(self, fname, update=True):
+        if fname not in self.__files.keys() or not update:
+            self.__files[fname] = self.__create_image_file(
+                os.path.basename(fname))
+
+        self.__files[fname].SetContentFile(fname)
+        self.__files[fname].Upload()
 
 
     def __login(self):
@@ -54,9 +96,25 @@ class DriveUploader:
         return file_list
 
 
-    def __upload_files_to_folder(self, fnames, folder):
-        for fname in fnames: 
-            nfile = self.__drive.CreateFile({'title':os.path.basename(fname),
-                                    'parents':[{u'id': folder['id']}]})
-            nfile.SetContentFile(fname)
-            nfile.Upload() 
+    def __create_file(self, name, mime_type=None):
+        param = {
+            'title': name,
+            'parents': [{ u'id': self.__folder['id'] }]
+        }
+
+        if mime_type != None:
+            param['mimeType'] = mime_type
+
+        return self.__drive.CreateFile(param)
+
+
+    def __create_text_file(self, name):
+        return self.__create_file(name)
+
+
+    def __create_csv_file(self, name):
+        return self.__create_file(name, 'text/csv')
+
+
+    def __create_image_file(self, name):
+        return self.__create_file(name)

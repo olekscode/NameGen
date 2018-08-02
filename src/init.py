@@ -1,12 +1,13 @@
 from metrics import confusion_dataframe
 from visualizations import plot_confusion_dataframe, plot_histories
-from drive import DriveUploader
+from drive import Drive
 from models.seq2seq import Seq2seq
 from preprocessing import unindex, read_langs, train_test_valid_split
 from constants import *
 
 import os
 import time
+import datetime
 import math
 from collections import OrderedDict
 
@@ -55,18 +56,49 @@ def evaluate(model, x, y):
     return df, corp_bleu
 
 
+def write_training_log(log_dict, corpus_bleu_history, sentence_bleu_history, loss_history, translations):
+    log_template =\
+        "[{}]\n".format(datetime.datetime.now()) +\
+        ": {}\n".join(list(log_dict.keys()) + [""])
+
+    log_string = log_template.format(*log_dict.values())
+    drive.log(log_string, fname="train-log.txt")
+
+    fname = '../img/histories.png'
+    fig = plot_histories(corpus_bleu_history, np.array(sentence_bleu_history).T, loss_history)
+    fig.savefig(fname)
+    drive.upload_image(fname)
+
+    confusion_df = confusion_dataframe(
+        translations['True Name'],
+        translations['Our Name'],
+        columns=['P', 'PP', 'TP', 'FP', 'FN'],
+        orderby=['TP', 'PP'])
+
+    fname = '../img/confusion.png'
+    fig = plot_confusion_dataframe(confusion_df)
+    fig.savefig(fname)
+    drive.upload_image(fname)
+
+    drive.log_dataframe(translations.sort_values('BLEU', ascending=False).head(20), 'translations.csv')
+    drive.log_dataframe(confusion_df[confusion_df['PP'] > 0]['PP'], 'names.csv')
+
+
 if __name__ == '__main__':
     total_time_start = time.time()
 
-    drive = DriveUploader('NameGen')
+    drive = Drive('NameGen')
 
     # Loading data
     data_dir = '../data'
     methods = pd.read_csv(os.path.join(data_dir, 'methods_tokenized.csv'), delimiter='\t')
 
-    drive.log('Data was loaded')
+    drive.log('Data was loaded', 'log.txt')
 
     source_vocab, target_vocab, corpora = read_langs('source', 'name', methods)
+
+    # # Danger
+    # corpora = corpora[:300]
 
     (x_train, y_train), (x_valid, y_valid), (x_test, y_test) = train_test_valid_split(corpora, source_vocab, target_vocab)
 
@@ -89,32 +121,10 @@ if __name__ == '__main__':
     total_batches = int(len(batch_indices)/BATCH_SIZE)
     for epoch in range(100):
         epoch_start_time = time.time()
-
-        if epoch > 0:
-            drive.log('Epoch {} training finished\nAverage loss: {:.5f}\nCorpus BLEU: {}\nAverage sentence BLEU:{}\nEpoch time: {}\nTotal time: {}\n'.format(
-                epoch,
-                total_loss/total_batches,
-                bleu,
-                translations['BLEU'].mean(),
-                time_str(epoch_time_elapsed),
-                time_str(total_time_elapsed)))
-
-            histories_img = '../img/histories-{}.png'.format(epoch)
-            confusion_img = '../img/confusion-{}.png'.format(epoch)
-
-            fig = plot_histories(corpus_bleu_history, np.array(sentence_bleu_history).T, loss_history)
-            fig.savefig(histories_img)
-
-            confusion_df = confusion_dataframe(translations['True Name'], translations['Our Name'])
-            fig = plot_confusion_dataframe(confusion_df)
-            fig.savefig(confusion_img)
-
-            drive.upload_to_drive([histories_img, confusion_img])
-
-        if epoch > 3:
-            break
         
         total_loss = 0
+        train_start_time = time.time()
+
         for batch in batch_generator(batch_indices, BATCH_SIZE):
             x_batch = x_train[batch, :] 
             # Here is the fix
@@ -133,10 +143,12 @@ if __name__ == '__main__':
             optimizer.step()
             
             total_loss += loss.item() #/(BATCH_SIZE*MAX_SEQ_LENGTH)
+
+        train_time_elapsed = time.time() - train_start_time
         
-        print('Evaluating model')
+        eval_start_time = time.time()
         translations, bleu = evaluate(model, x_valid, y_valid)
-        drive.update_translations(translations.sort_values('BLEU', ascending=False).head(20))
+        eval_time_elapsed = time.time() - eval_start_time
 
         corpus_bleu_history.append(bleu)
         sentence_bleu_history.append(translations['BLEU'])
@@ -145,8 +157,21 @@ if __name__ == '__main__':
         epoch_time_elapsed = time.time() - epoch_start_time
         total_time_elapsed = time.time() - total_time_start
 
-    # drive = DriveUploader('NameGen')
-    # drive.upload_to_drive(['../img/histories.png'])
-    
-    # for i in range(10):
-    #     drive.log('{}'.format(i))
+        log_dict = OrderedDict([
+            ("Epoch", epoch + 1),
+            ("Average loss", total_loss / total_batches),
+            ("Corpus BLEU", bleu),
+            ("Average sentence BLEU", translations['BLEU'].mean()),
+            ("Unique names", len(translations['Our Name'].unique())),
+            ("Epoch time", time_str(epoch_time_elapsed)),
+            ("Training time", time_str(train_time_elapsed)),
+            ("Evaluation time", time_str(eval_time_elapsed)),
+            ("Total time", time_str(total_time_elapsed))
+        ])
+
+        write_training_log(
+            log_dict,
+            corpus_bleu_history,
+            sentence_bleu_history,
+            loss_history,
+            translations)

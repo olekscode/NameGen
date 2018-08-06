@@ -148,9 +148,7 @@ def bleu(reference, candidate):
     >>> bleu(reference, candidate)
     0.5
     """
-    reference = set(reference)
-
-    m = len([word for word in candidate if word in reference])
+    m = len([word for word in candidate if word in set(reference)])
     w = len(candidate)
 
     if w == 0:
@@ -160,10 +158,21 @@ def bleu(reference, candidate):
 
 
 def rouge(reference, candidate):
-    reference = set(reference)
-
-    m = len([word for word in candidate if word in reference])
+    m = len([word for word in candidate if word in set(reference)])
     w = len(reference)
+
+    if w == 0:
+        w = 0.000000001
+
+    return m / w
+
+
+def f1_score(reference, candidate):
+    precision = bleu(reference, candidate)
+    recall = rouge(reference, candidate)
+
+    m = 2 * (precision * recall)
+    w = precision + recall
 
     if w == 0:
         w = 0.000000001

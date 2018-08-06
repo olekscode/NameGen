@@ -1,4 +1,4 @@
-from metrics import confusion_dataframe, bleu, rouge
+from metrics import confusion_dataframe, bleu, rouge, f1_score
 from constants import SOS_TOKEN, EOS_TOKEN
 
 from collections import OrderedDict
@@ -15,8 +15,8 @@ class Evaluator:
 
     def evaluate(self, model):
         names = self.__predict_names(model)
-        confusion_df = self.__build_confusion_dataframe(names)
-        return names, confusion_df
+        # confusion_df = self.__build_confusion_dataframe(names)
+        return names
 
 
     def __predict_names(self, model):
@@ -53,7 +53,8 @@ class Evaluator:
             ('True Name', [' '.join(sent) for sent in y_true]),
             ('Our Name', [' '.join(sent) for sent in y_pred]),
             ('BLEU', [bleu(y_true[i], y_pred[i]) for i in range(len(y_true))]),
-            ('ROUGE', [rouge(y_true[i], y_pred[i]) for i in range(len(y_true))])
+            ('ROUGE', [rouge(y_true[i], y_pred[i]) for i in range(len(y_true))]),
+            ('F1', [f1_score(y_true[i], y_pred[i]) for i in range(len(y_true))])
         ]))
         
         return names

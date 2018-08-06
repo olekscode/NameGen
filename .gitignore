@@ -1,5 +1,10 @@
 client_secrets.json
 data/*
+!data/.gitkeep
+src/logs/*
+!src/logs/.gitkeep
+src/results/*
+!src/results/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

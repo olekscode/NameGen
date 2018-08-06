@@ -1,11 +1,14 @@
-from constants import MAX_LENGTH, SOS_TOKEN, EOS_TOKEN
+import constants
 from models.encoder import EncoderRNN
 from models.decoder import AttnDecoderRNN
 from util import time_str
 
+import os
 import time
 import random
 from collections import OrderedDict
+
+import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -29,7 +32,7 @@ class Seq2Seq(nn.Module):
         self.criterion = nn.NLLLoss()
 
 
-    def train(self, input_tensor, target_tensor, max_length=MAX_LENGTH):
+    def train(self, input_tensor, target_tensor, max_length=constants.MAX_LENGTH):
         encoder_hidden = self.encoder.initHidden()
 
         self.encoder_optimizer.zero_grad()
@@ -46,7 +49,7 @@ class Seq2Seq(nn.Module):
             encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 
-        decoder_input = torch.tensor([[SOS_TOKEN]], device=self.device)
+        decoder_input = torch.tensor([[constants.SOS_TOKEN]], device=self.device)
         decoder_hidden = encoder_hidden
 
         use_teacher_forcing = True if random.random() < self.teacher_forcing_ratio else False
@@ -68,7 +71,7 @@ class Seq2Seq(nn.Module):
 
                 loss += self.criterion(decoder_output, target_tensor[di])
 
-                if decoder_input.item() == EOS_TOKEN:
+                if decoder_input.item() == constants.EOS_TOKEN:
                     break
 
         loss.backward()
@@ -79,7 +82,7 @@ class Seq2Seq(nn.Module):
         return loss.item() / target_length
 
 
-    def trainIters(self, pairs, n_iters, logger, evaluator, log_every=100):
+    def trainIters(self, pairs, first_iter, last_iter, logger, evaluator, log_every=100):
         start_total_time = time.time()
         start_epoch_time = time.time() # Reset every log_every
         start_train_time = time.time() # Reset every log_every
@@ -88,9 +91,11 @@ class Seq2Seq(nn.Module):
         avg_loss_history = []
         avg_bleu_history = []
         avg_rouge_history = []
+        avg_f1_history = []
+        num_unique_names_history = []
 
 
-        for iter in range(1, n_iters + 1):
+        for iter in range(first_iter, last_iter + 1):
             training_pair = random.choice(pairs)
             input_tensor = training_pair[0]
             target_tensor = training_pair[1]
@@ -101,36 +106,57 @@ class Seq2Seq(nn.Module):
             if iter % log_every == 0:
                 train_time_elapsed = time.time() - start_train_time
 
+                torch.save(self.state_dict(), 'results/trained_model.pt')
+
+                with open(os.path.join(constants.LOGS_DIR, 'iters_completed.txt'), 'w') as f:
+                    f.write(str(iter))
+
                 start_eval_time = time.time()
-                names, confusion_df = evaluator.evaluate(self)
+                names = evaluator.evaluate(self)
                 eval_time_elapsed = time.time() - start_eval_time
 
                 avg_loss_history.append(total_loss / log_every)
                 avg_bleu_history.append(names['BLEU'].mean())
                 avg_rouge_history.append(names['ROUGE'].mean())
+                avg_f1_history.append(names['F1'].mean())
+                num_unique_names_history.append(len(names['Our Name'].unique()))
 
                 epoch_time_elapsed = time.time() - start_epoch_time
                 total_time_elapsed = time.time() - start_total_time
 
                 log_dict = OrderedDict([
-                    ("Iteration",  '{}/{} ({:.1f}%)'.format(iter, n_iters, iter / n_iters * 100)),
+                    ("Iteration",  '{}/{} ({:.1f}%)'.format(iter, last_iter, iter / last_iter * 100)),
                     ("Average loss", avg_loss_history[-1]),
                     ("Average BLEU", avg_bleu_history[-1]),
                     ("Average ROUGE", avg_rouge_history[-1]),
-                    ("Unique names", len(names['Our Name'].unique())),
+                    ("Average F1", avg_f1_history[-1]),
+                    ("Unique names", num_unique_names_history[-1]),
                     ("Epoch time", time_str(epoch_time_elapsed)),
                     ("Training time", time_str(train_time_elapsed)),
                     ("Evaluation time", time_str(eval_time_elapsed)),
                     ("Total training time", time_str(total_time_elapsed))
                 ])
 
-                logger.write_training_log(
-                    log_dict,
+                logger.write_training_log(log_dict, os.path.join(constants.LOGS_DIR, 'train-log.txt'))
+
+                logger.plot_and_save_histories(
+                    avg_loss_history,
                     avg_bleu_history,
                     avg_rouge_history,
-                    avg_loss_history,
-                    names,
-                    confusion_df)
+                    avg_f1_history,
+                    num_unique_names_history)
+
+                logger.save_dataframe(names, os.path.join(constants.RESULTS_DIR, 'valid_names.csv'))
+
+                histories = pd.DataFrame(OrderedDict([
+                    ('Loss', avg_loss_history),
+                    ('BLEU', avg_bleu_history),
+                    ('ROUGE', avg_rouge_history),
+                    ('F1', avg_f1_history),
+                    ('num_names', num_unique_names_history)
+                ]))
+
+                logger.save_dataframe(histories, os.path.join(constants.RESULTS_DIR, 'histories.csv'))
 
                 # Reseting counters
                 total_loss = 0
@@ -138,7 +164,7 @@ class Seq2Seq(nn.Module):
                 start_train_time = time.time()
 
 
-    def forward(self, input_tensor, max_length=MAX_LENGTH):
+    def forward(self, input_tensor, max_length=constants.MAX_LENGTH):
         encoder_hidden = self.encoder.initHidden()
 
         input_length = input_tensor.size(0)
@@ -149,7 +175,7 @@ class Seq2Seq(nn.Module):
             encoder_output, encoder_hidden = self.encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] = encoder_output[0, 0]
 
-        decoder_input = torch.tensor([[SOS_TOKEN]], device=self.device)
+        decoder_input = torch.tensor([[constants.SOS_TOKEN]], device=self.device)
         decoder_hidden = encoder_hidden
         decoded_words = []
 
@@ -157,8 +183,8 @@ class Seq2Seq(nn.Module):
             decoder_output, decoder_hidden, decoder_attention = self.decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
             topv, topi = decoder_output.data.topk(1)
-            if topi.item() == EOS_TOKEN:
-                decoded_words.append(EOS_TOKEN)
+            if topi.item() == constants.EOS_TOKEN:
+                decoded_words.append(constants.EOS_TOKEN)
                 break
             else:
                 decoded_words.append(topi.item())

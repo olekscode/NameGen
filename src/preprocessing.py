@@ -60,10 +60,10 @@ def read_langs(lang1, lang2, corpora):
         input_sent = row[lang1]
         target_sent = row[lang2]
         
-        input_tokenized = input_sent.split()
-        target_tokenized = target_sent.split()
+        input_tokenized = str(input_sent).split()
+        target_tokenized = str(target_sent).split()
 
-        if len(input_tokenized) > MAX_LENGTH:
+        if len(input_tokenized) > MAX_LENGTH and len(input_tokenized) > 0 and len(target_tokenized) > 0:
             continue
         
         input_sentences.append(input_tokenized)
@@ -95,48 +95,3 @@ def train_validation_test_split(data, train_proportion, validation_proportion, t
     test_set = data[test_idx]
 
     return train_set, valid_set, test_set
-
-
-# def __indexes_from_sentence(vocab, sentence):
-#     return [vocab.word2index[word] for word in sentence]
-
-
-# def __tensor_from_sentence(lang, sentence):
-#     indexes = __indexes_from_sentence(lang, sentence)
-#     indexes.append(EOS_token)
-#     indexes.insert(0, SOS_token)
-#     # we need to have all sequences the same length to process them in batches
-#     if len(indexes) < MAX_SEQ_LENGTH:
-#         indexes += [PAD_token]*(MAX_SEQ_LENGTH-len(indexes))
-#     tensor = torch.LongTensor(indexes)
-#     if USE_CUDA: var = tensor.cuda()
-#     return tensor
-
-
-# def __tensors_from_pair(source_sent, target_sent, source_vocab, target_vocab):
-#     source_tensor = __tensor_from_sentence(source_vocab, source_sent).unsqueeze(1)
-#     target_tensor = __tensor_from_sentence(target_vocab, target_sent).unsqueeze(1)
-    
-#     return (source_tensor, target_tensor)
-
-
-# def __get_xy(corpora, source_vocab, target_vocab):
-#     tensors = []
-#     for source_sent, target_sent in corpora:
-#         tensors.append(__tensors_from_pair(source_sent, target_sent, source_vocab, target_vocab))
-
-#     x, y = zip(*tensors)
-#     x = torch.transpose(torch.cat(x, dim=-1), 1, 0)
-#     y = torch.transpose(torch.cat(y, dim=-1), 1, 0)
-    
-#     return x, y
-
-
-# def __remove_sos_eos_pad(sentence):
-#     return [word_id for word_id in sentence if word_id > 3]
-
-
-# def unindex(sentence, vocab):
-#     sentence = __remove_sos_eos_pad(sentence)
-#     sentence = vocab.unindex_words(sentence)
-#     return sentence

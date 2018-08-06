@@ -1,3 +1,6 @@
+import constants
+
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -6,7 +9,8 @@ sns.set()
 COLORS = {
     'green': sns.xkcd_rgb["faded green"],
     'red': sns.xkcd_rgb["pale red"],
-    'blue': sns.xkcd_rgb["medium blue"]
+    'blue': sns.xkcd_rgb["medium blue"],
+    'yellow': sns.xkcd_rgb["ochre"]
 }
 
 
@@ -29,9 +33,10 @@ def plot_confusion_dataframe(df, nrows=5, with_percents=False, total=None):
     return fig
 
 
-def plot_history(history, color, title, ylabel, xlabel='Epoch'): 
+def plot_history(history, color, title, ylabel, xlabel='Iteration'): 
     fig, ax = plt.subplots()
-    ax.plot(history, color)
+    x = constants.LOG_EVERY * np.arange(len(history))
+    ax.plot(x, history, color)
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)

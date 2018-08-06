@@ -1,0 +1,13 @@
+{
+	"commentStamp" : "",
+	"super" : "NGAbstractTokenizer",
+	"category" : "NGDataCollection",
+	"classinstvars" : [ ],
+	"pools" : [ ],
+	"classvars" : [ ],
+	"instvars" : [
+		"tokenizers"
+	],
+	"name" : "NGTokenizationPipeline",
+	"type" : "normal"
+}

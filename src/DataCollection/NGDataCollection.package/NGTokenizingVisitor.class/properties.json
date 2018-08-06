@@ -1,0 +1,15 @@
+{
+	"commentStamp" : "",
+	"super" : "RBProgramNodeVisitor",
+	"category" : "NGDataCollection",
+	"classinstvars" : [ ],
+	"pools" : [ ],
+	"classvars" : [ ],
+	"instvars" : [
+		"name",
+		"tokens",
+		"arguments"
+	],
+	"name" : "NGTokenizingVisitor",
+	"type" : "normal"
+}
